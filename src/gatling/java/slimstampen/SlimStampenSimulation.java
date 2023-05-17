@@ -13,17 +13,22 @@ import static io.gatling.javaapi.http.HttpDsl.*;
 
 public class SlimStampenSimulation extends Simulation {
 
-    private final String testBaseUrl = "https://gatling.test.slimstampen.nl/ruggedlearning";
-    private final String stagingBaseUrl = "https://gatling.staging.slimstampen.nl/ruggedlearning";
     private final static int amountOfResponses = 100;
-    private final static int amountOfUsers = 200;
+    private final static int amountOfUsers = 100;
+
+    private final static String testBaseUrl = "https://gatling.test.slimstampen.nl/ruggedlearning";
+    private final static String stagingBaseUrl = "https://gatling.staging.slimstampen.nl/ruggedlearning";
     private final static int testLessonId = 892;
     private final static int stagingLessonId = 110;
-    private final static String stagingResponses = "gatling_responses_staging.json";
     private final static String testResponses = "gatling_responses_test.json";
+    private final static String stagingResponses = "gatling_responses_staging.json";
+
+    private final static String baseUrl = testBaseUrl;
+    private final static String responses = testResponses;
+    private final static int lessonId = testLessonId;
 
     FeederBuilder<String> userFeeder = csv("users.csv").circular();
-    FeederBuilder<Object> responseFeeder = jsonFile(testResponses).random();
+    FeederBuilder<Object> responseFeeder = jsonFile(responses).random();
 
     ChainBuilder jwks =
             exec(http("JWKS").get("/.well-known/jwks.json").check(status().is(200)));
@@ -40,13 +45,13 @@ public class SlimStampenSimulation extends Simulation {
                     .get("/api/profile/get")
                     .check(bodyString().saveAs("body"))
                     .check(status().is(200))
-                    .check(jsonPath("$.anonymous").ofBoolean().is(  false))
+                    .check(jsonPath("$.anonymous").ofBoolean().is(false))
             )
             .pause(2)
             .exec(http("get_first_cue")
-                    .get("/api/response/getFirstCue/892")
+                    .get("/api/response/getFirstCue/" + lessonId)
                     .check(bodyString().saveAs("first_cue"))
-                    .check(jsonPath("$.sessionId").saveAs("initialized_session_id"))
+                    .check(jsonPath("$.sessionId").saveAs("initialized_session_id")) // comment out this line for staging
                     .check(status().is(200)))
             .pause(2)
             .repeat(amountOfResponses).on(
@@ -61,14 +66,14 @@ public class SlimStampenSimulation extends Simulation {
                                             "\"correct\": \"#{correct}\", " +
                                             "\"factId\": \"#{fact_id}\", " +
                                             "\"givenResponse\": \"#{given_response}\", " +
-                                            "\"lessonId\": \"892\", " +
+                                            "\"lessonId\": \""+ lessonId +"\", " +
                                             "\"mostDifficult\": \"false\", " +
                                             "\"presentationDuration\": \"#{presentation_duration}\", " +
                                             "\"presentationStartTime\": \"#{presentation_start_time}\", " +
                                             "\"presentedCueTextIndex\": \"#{presented_cue_text_index}\", " +
                                             "\"reactionTime\": \"#{reaction_time}\", " +
-                                            "\"sessionId\": \"#{initialized_session_id}\", " +
-//                                            "\"sessionId\": \"#{session_id}\", " +
+//                                            "\"sessionId\": \"#{initialized_session_id}\", " + // comment out this for staging
+                                            "\"sessionId\": \"#{session_id}\", " + // comment out this for test
                                             "\"sessionTime\": \"#{session_time}\"}"))
                                     .check(status().is(200))
                             )
@@ -87,7 +92,7 @@ public class SlimStampenSimulation extends Simulation {
                     .check(status().is(200)));
 
     HttpProtocolBuilder httpProtocol =
-            http.baseUrl(testBaseUrl)
+            http.baseUrl(baseUrl)
                     .acceptHeader("application/json,text/plain,*/*")
                     .acceptLanguageHeader("nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7,de;q=0.6")
                     .acceptEncodingHeader("gzip, deflate, br")
@@ -102,9 +107,9 @@ public class SlimStampenSimulation extends Simulation {
 
     {
         setUp(
-//                json.injectOpen(rampUsers(amountOfUsers).during(50)),
-                loginScenario.injectOpen(rampUsers(amountOfUsers).during(50))
-//                loadLibraryScenario.injectOpen(rampUsers(amountOfUsers).during(20))
+                json.injectOpen(rampUsers(amountOfUsers).during(50)),
+                loginScenario.injectOpen(rampUsers(amountOfUsers).during(amountOfUsers)),
+                loadLibraryScenario.injectOpen(rampUsers(amountOfUsers).during(20))
         ).protocols(httpProtocol);
     }
 }
