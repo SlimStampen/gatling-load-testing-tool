@@ -13,17 +13,17 @@ import static io.gatling.javaapi.http.HttpDsl.*;
 
 public class SlimStampenSimulation extends Simulation {
 
-    private final static int AMOUNT_OF_RESPONSES = 100;
-    private final static int AMOUNT_OF_USERS = 100;
-    private final static String TEST_BASE_URL = "https://gatling.test.slimstampen.nl/ruggedlearning";
-    private final static String STAGING_BASE_URL = "https://gatling.staging.slimstampen.nl/ruggedlearning";
-    private final static int TEST_LESSON_ID = 892;
-    private final static int STAGING_LESSON_ID = 110;
-    private final static String TEST_RESPONSES = "gatling_responses_test.json";
-    private final static String STAGING_RESPONSES = "gatling_responses_staging.json";
-    private final static String BASE_URL = TEST_BASE_URL;
-    private final static String RESPONSES = TEST_RESPONSES;
-    private final static int LESSON_ID = TEST_LESSON_ID;
+    private static final int AMOUNT_OF_RESPONSES = 100;
+    private static final int AMOUNT_OF_USERS = 100;
+    private static final String TEST_BASE_URL = "https://gatling.test.slimstampen.nl/ruggedlearning";
+    private static final String STAGING_BASE_URL = "https://gatling.staging.slimstampen.nl/ruggedlearning";
+    private static final int TEST_LESSON_ID = 892;
+    private static final int STAGING_LESSON_ID = 110;
+    private static final String TEST_RESPONSES = "gatling_responses_test.json";
+    private static final String STAGING_RESPONSES = "gatling_responses_staging.json";
+    private static final String BASE_URL = TEST_BASE_URL;
+    private static final String RESPONSES = TEST_RESPONSES;
+    private static final int LESSON_ID = TEST_LESSON_ID;
 
     FeederBuilder<String> userFeeder = csv("users.csv").circular();
     FeederBuilder<Object> responseFeeder = jsonFile(RESPONSES).random();
@@ -77,7 +77,7 @@ public class SlimStampenSimulation extends Simulation {
                             )
             );
 
-    ChainBuilder loadLibrary = feed(userFeeder)
+    ChainBuilder loginAndCheckStatistics = feed(userFeeder)
             .exec(http("login")
                     .post("/api/user/login")
                     .body(StringBody("{ \"username\": \"#{email}\", \"password\": \"#{password}\"}"))
@@ -85,9 +85,39 @@ public class SlimStampenSimulation extends Simulation {
             )
             .pause(1)
             .exec(addCookie(Cookie("Cookie", "#{session}")))
+            .exec(http("profile_get")
+                    .get("/api/profile/get/en-GB")
+                    .check(bodyString().saveAs("body"))
+                    .check(status().is(200))
+                    .check(jsonPath("$.anonymous").ofBoolean().is(false))
+            )
+            .exec(http("get_sort_option")
+                    .get("/api/lesson-group/sort")
+                    .check(status().is(200))
+            )
+            .exec(http("get_environment")
+                    .get("/api/environment")
+                    .check(status().is(200))
+            )
+            .exec(http("get_domain")
+                    .get("/api/domain")
+                    .check(status().is(200))
+            )
+            .exec(http("get_categories")
+                    .get("/api/category/all")
+                    .check(status().is(200))
+            )
             .exec(http("load_lesson")
-                    .get("/api/lesson-group/library?languageTag=nl-NL&pageNo=0&pageSize=50&userIds=&searchTerm=&sortBy=TITLE&sortDirection=ASC")
-                    .check(status().is(200)));
+                    .get("/api/lesson-group/library?pageNo=0&pageSize=50&categoryIds=&searchTerm=&sortBy=POPULARITY&sortDirection=ASC")
+                    .check(status().is(200)))
+            .exec(http("get_lesson_info")
+                    .get("/api/lesson-info/" + LESSON_ID)
+                    .check(status().is(200))
+            )
+            .exec(http("get_stats")
+                    .get("/api/stats/lesson/" + LESSON_ID + "?timezone=Europe%2FAmsterdam")
+                    .check(status().is(200))
+            );
 
     HttpProtocolBuilder httpProtocol =
             http.baseUrl(BASE_URL)
@@ -101,13 +131,13 @@ public class SlimStampenSimulation extends Simulation {
 
     ScenarioBuilder json = scenario("Json").exec(jwks);
     ScenarioBuilder loginScenario = scenario("Login and practice").exec(loginAndPractice);
-    ScenarioBuilder loadLibraryScenario = scenario("LoadLessons").exec(loadLibrary);
+    ScenarioBuilder classroomScenario = scenario("Login, load the library and check statistics").exec(loginAndCheckStatistics);
 
     {
         setUp(
                 json.injectOpen(rampUsers(AMOUNT_OF_USERS).during(50)),
                 loginScenario.injectOpen(rampUsers(AMOUNT_OF_USERS).during(AMOUNT_OF_USERS)),
-                loadLibraryScenario.injectOpen(rampUsers(AMOUNT_OF_USERS).during(20))
+                classroomScenario.injectOpen(atOnceUsers(30))
         ).protocols(httpProtocol);
     }
 }
