@@ -154,9 +154,11 @@ public class SlimStampenSimulation extends Simulation {
 
     {
         setUp(
-                json.injectOpen(rampUsers(AMOUNT_OF_USERS).during(50)),
-                loginScenario.injectOpen(rampUsers(AMOUNT_OF_USERS).during(AMOUNT_OF_USERS)),
-                classroomScenario.injectOpen(atOnceUsers(30))
+                json.injectOpen(rampUsers(AMOUNT_OF_USERS).during(10)),
+                loginScenario.injectOpen(
+                        // Stagger user start times randomly between 0 and 5 seconds
+                        nothingFor(Duration.ofMillis(ThreadLocalRandom.current().nextInt(0, 1))),
+                        rampUsers(AMOUNT_OF_USERS).during(AMOUNT_OF_USERS / 2)
                 ),
                 classroomScenario.injectOpen(atOnceUsers(1))
         ).protocols(httpProtocol);
