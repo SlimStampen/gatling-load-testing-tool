@@ -7,13 +7,14 @@ import io.gatling.javaapi.core.Simulation;
 import io.gatling.javaapi.http.HttpProtocolBuilder;
 
 import java.time.Duration;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 public class SlimStampenSimulation extends Simulation {
 
-    private static final int AMOUNT_OF_RESPONSES = 100;
+    private static final int AMOUNT_OF_RESPONSES = 30;
     private static final int AMOUNT_OF_USERS = 100;
     private static final String TEST_BASE_URL = "https://gatling.test.slimstampen.nl/ruggedlearning";
     private static final String STAGING_BASE_URL = "https://gatling.staging.slimstampen.nl/ruggedlearning";
@@ -40,41 +41,59 @@ public class SlimStampenSimulation extends Simulation {
             .exec(addCookie(Cookie("Cookie", "#{session}")))
             .pause(1)
             .exec(http("profile_get")
-                    .get("/api/profile/get")
+                    .get("/api/profile/get/en-GB")
                     .check(bodyString().saveAs("body"))
                     .check(status().is(200))
                     .check(jsonPath("$.anonymous").ofBoolean().is(false))
             )
             .pause(2)
             .exec(http("get_first_cue")
-                    .get("/api/response/getFirstCue/" + LESSON_ID)
+                    .post("/api/response/getFirstCue/" + LESSON_ID + "?timezone=Europe%2FAmsterdam")
                     .check(bodyString().saveAs("first_cue"))
-                    .check(jsonPath("$.sessionId").saveAs("initialized_session_id")) // comment out this line for staging
+                    .check(jsonPath("$.sessionId").saveAs("initialized_session_id"))
                     .check(status().is(200)))
             .pause(2)
             .repeat(AMOUNT_OF_RESPONSES).on(
                     feed(responseFeeder)
                             .pause(session -> Duration.ofMillis(2000), session -> Duration.ofMillis(3000))
+                            .exec(session -> {
+                                long startTime = session.contains("startTime") ? session.getLong("startTime") : System.currentTimeMillis() - ThreadLocalRandom.current().nextLong(500, 2001);
+                                long reactionTime = ThreadLocalRandom.current().nextLong(500, 2001);
+                                long presentationDuration = reactionTime + ThreadLocalRandom.current().nextLong(500, 1001);
+                                long currentTime = System.currentTimeMillis();
+                                long sessionTime = currentTime - startTime;
+                                return session
+                                        .set("startTime", startTime)
+                                        .set("reaction_time", reactionTime)
+                                        .set("presentation_duration", presentationDuration)
+                                        .set("session_time", sessionTime)
+                                        .set("presentation_start_time", currentTime);
+                            })
                             .exec(http("response_save")
                                     .post("/api/response/save")
                                     .body(StringBody("{\"alternatives\": \"[]\", " +
-                                            "\"answerMethod\": \"#{answer_method}\"," +
-                                            "\"backSpaceUsed\": \"#{backspace_used}\", " +
-                                            "\"backSpacedFirstLetter\": \"#{backspaced_first_letter}\", " +
-                                            "\"correct\": \"#{correct}\", " +
-                                            "\"factId\": \"#{fact_id}\", " +
-                                            "\"givenResponse\": \"#{given_response}\", " +
-                                            "\"lessonId\": \""+ LESSON_ID +"\", " +
-                                            "\"mostDifficult\": \"false\", " +
-                                            "\"presentationDuration\": \"#{presentation_duration}\", " +
-                                            "\"presentationStartTime\": \"#{presentation_start_time}\", " +
-                                            "\"presentedCueTextIndex\": \"#{presented_cue_text_index}\", " +
-                                            "\"reactionTime\": \"#{reaction_time}\", " +
-//                                            "\"sessionId\": \"#{initialized_session_id}\", " + // comment out this for staging
-                                            "\"sessionId\": \"#{session_id}\", " + // comment out this for test
-                                            "\"sessionTime\": \"#{session_time}\"}"))
+                                                     "\"answerMethod\": \"#{answer_method}\"," +
+                                                     "\"backSpaceUsed\": \"#{backspace_used}\", " +
+                                                     "\"backSpacedFirstLetter\": \"#{backspaced_first_letter}\", " +
+                                                     "\"correct\": \"#{correct}\", " +
+                                                     "\"factId\": \"#{fact_id}\", " +
+                                                     "\"givenResponse\": \"#{given_response}\", " +
+                                                     "\"lessonId\": \"" + LESSON_ID + "\", " +
+                                                     "\"mostDifficult\": \"false\", " +
+                                                     "\"presentationDuration\": \"#{presentation_duration}\", " +
+                                                     "\"presentationStartTime\": \"#{presentation_start_time}\", " +
+                                                     "\"presentedCueTextIndex\": \"#{presented_cue_text_index}\", " +
+                                                     "\"reactionTime\": \"#{reaction_time}\", " +
+                                                     "\"timezone\": \"Europe/Amsterdam\", " +
+                                                     "\"sessionId\": \"#{initialized_session_id}\", " +
+                                                     "\"sessionTime\": \"#{session_time}\"}"))
                                     .check(status().is(200))
                             )
+            )
+            .pause(3)
+            .exec(http("get_finished_stats")
+                    .get("/api/practiceStats/finish/#{initialized_session_id}/" + LESSON_ID)
+                    .check(status().is(200))
             );
 
     ChainBuilder loginAndCheckStatistics = feed(userFeeder)
@@ -138,6 +157,8 @@ public class SlimStampenSimulation extends Simulation {
                 json.injectOpen(rampUsers(AMOUNT_OF_USERS).during(50)),
                 loginScenario.injectOpen(rampUsers(AMOUNT_OF_USERS).during(AMOUNT_OF_USERS)),
                 classroomScenario.injectOpen(atOnceUsers(30))
+                ),
+                classroomScenario.injectOpen(atOnceUsers(1))
         ).protocols(httpProtocol);
     }
 }
