@@ -80,8 +80,8 @@ public class HealthAPISimulation extends Simulation {
     }
 
     private static boolean extractStudyTrial(Session session) {
-        if (session.contains("firstTime")) {
-            Object firstTimeObj = session.get("firstTime");
+        if (session.contains("studyTrial")) {
+            Object firstTimeObj = session.get("studyTrial");
             if (firstTimeObj instanceof Boolean) {
                 return (Boolean) firstTimeObj;
             } else if (firstTimeObj instanceof String) {
@@ -122,7 +122,7 @@ public class HealthAPISimulation extends Simulation {
                     .check(jsonPath("$.cue.fact.id").saveAs("factId"))
                     .check(jsonPath("$.cue.fact.answer").saveAs("answer"))
                     .check(jsonPath("$.cue.multipleChoiceAnswers").saveAs("multipleChoiceAnswers"))
-                    .check(jsonPath("$.cue.firstTime").saveAs("firstTime"))
+                    .check(jsonPath("$.cue.studyTrial").saveAs("studyTrial"))
 
             )
             .pause(1, 3)
@@ -148,7 +148,7 @@ public class HealthAPISimulation extends Simulation {
                                     .check(jsonPath("$.cue.fact.id").saveAs("factId"))
                                     .check(jsonPath("$.cue.fact.answer").saveAs("answer"))
                                     .check(jsonPath("$.cue.multipleChoiceAnswers").saveAs("multipleChoiceAnswers"))
-                                    .check(jsonPath("$.cue.firstTime").saveAs("firstTime"))
+                                    .check(jsonPath("$.cue.studyTrial").saveAs("studyTrial"))
                             )
                             .pause(1, 3)
             )
