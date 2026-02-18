@@ -12,17 +12,16 @@ import static io.gatling.javaapi.http.HttpDsl.*;
 import static ssaas.SSaaSSimulationBase.*;
 
 
-public class SSaaSV2Simulation extends Simulation {
-
+public class SSaaSV1Simulation extends Simulation {
 
     ChainBuilder practiceSessionFlow = exec(session -> {
-                // Generate UUID userId for V2
-                String userId = generateUuidUserId();
+                // Generate numeric userId for V1
+                String userId = generateNumericUserId();
 
-                // Build facts list based on configuration (V2 uses UUIDs)
-                // - If USE_SAME_FACT_IDS_FOR_ALL_USERS = true: use shared UUIDs (cache testing)
-                // - If USE_SAME_FACT_IDS_FOR_ALL_USERS = false: generate unique UUIDs (UUID mapping testing)
-                List<Fact> userFacts = buildFactsListV2(USE_SAME_FACT_IDS_FOR_ALL_USERS);
+                // Build facts list based on configuration (V1 uses numeric IDs)
+                // - If USE_SAME_FACT_IDS_FOR_ALL_USERS = true: use shared numeric IDs (1, 2, 3, etc.)
+                // - If USE_SAME_FACT_IDS_FOR_ALL_USERS = false: generate unique numeric IDs (1000+)
+                List<Fact> userFacts = buildFactsListV1(USE_SAME_FACT_IDS_FOR_ALL_USERS);
 
                 // Build facts JSON array
                 StringBuilder factsJson = new StringBuilder("[");
@@ -49,13 +48,13 @@ public class SSaaSV2Simulation extends Simulation {
                     .set("startTime", timestamp);
             })
             .exec(http("Initialize Session")
-                    .post("/v2/session/initialize")
+                    .post("/v1/session/initialize")
                     .body(StringBody("#{requestBody}"))
                     .check(status().is(200))
                     .check(jsonPath("$.sessionId").saveAs("sessionId"))
                     .check(jsonPath("$.cue.fact.id").saveAs("factId"))
                     .check(jsonPath("$.cue.fact.id").transform(factId -> {
-                        validateUuidFormat(factId);
+                        validateNumericFormat(factId);
                         return factId;
                     }).exists())
                     .check(jsonPath("$.cue.fact.answers[0]").saveAs("correctAnswer"))
@@ -67,7 +66,7 @@ public class SSaaSV2Simulation extends Simulation {
             .repeat(10).on(
                     exec(SSaaSSimulationBase::prepareResponseSession)
                             .exec(http("Submit Response")
-                                    .post("/v2/response/save")
+                                    .post("/v1/response/save")
                                     .body(StringBody(session -> {
                                         String presentedImageIndex = session.getString("presentedImageIndex");
                                         String imageIndexValue = (presentedImageIndex == null || presentedImageIndex.equals("null")) ? "null" : presentedImageIndex;
@@ -92,15 +91,19 @@ public class SSaaSV2Simulation extends Simulation {
                                     .check(status().is(200))
                                     .check(jsonPath("$.cue").optional().saveAs("cueExists"))
                                     .check(jsonPath("$.cue.fact.id").optional().saveAs("factId"))
-                                    .check(jsonPath("$.cue.fact.id").transform(factId -> {
-                                        validateUuidFormat(factId);
-                                        return factId;
-                                    }).exists())
                                     .check(jsonPath("$.cue.fact.answers[0]").optional().saveAs("correctAnswer"))
                                     .check(jsonPath("$.cue.fact.presentedCueTextIndex").optional().saveAs("presentedCueTextIndex"))
                                     .check(jsonPath("$.cue.fact.presentedImageIndex").optional().saveAs("presentedImageIndex"))
                                     .check(jsonPath("$.sessionProgress.achievedCredit").optional().saveAs("achievedCredit"))
                             )
+                            .exec(session -> {
+                                // Validate numeric format when factId is present (V1 uses numeric IDs)
+                                String factId = session.getString("factId");
+                                if (factId != null && !factId.equals("null")) {
+                                    validateNumericFormat(factId);
+                                }
+                                return session;
+                            })
                             .pause(1, 3)
                             .exitHereIf(session -> {
                                 // Exit if achievedCredit is true or no more cues
@@ -117,9 +120,9 @@ public class SSaaSV2Simulation extends Simulation {
                     .acceptEncodingHeader("gzip, deflate, br")
                     .contentTypeHeader("application/json")
                     .userAgentHeader("Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:16.0) Gecko/20100101 Firefox/16.0")
-                    .authorizationHeader("Bearer gatling-v2");
+                    .authorizationHeader("Bearer gatling-token");
 
-    ScenarioBuilder practiceSessionScenario = scenario("V2 Practice Session Scenario")
+    ScenarioBuilder practiceSessionScenario = scenario("V1 Practice Session Scenario")
             .exec(practiceSessionFlow);
 
     {
