@@ -63,7 +63,7 @@ public class SSaaSV1Simulation extends Simulation {
                     .check(jsonPath("$.sessionProgress.achievedCredit").saveAs("achievedCredit"))
             )
             .pause(1, 2)
-            .repeat(10).on(
+            .repeat(30).on(
                     exec(SSaaSSimulationBase::prepareResponseSession)
                             .exec(http("Submit Response")
                                     .post("/v1/response/save")
@@ -127,7 +127,7 @@ public class SSaaSV1Simulation extends Simulation {
 
     {
         setUp(
-                practiceSessionScenario.injectOpen(rampUsers(5).during(15))
+                practiceSessionScenario.injectOpen(rampUsers(10).during(15))
 //                practiceSessionScenario.injectOpen(atOnceUsers(40))
 
         ).protocols(httpProtocol);

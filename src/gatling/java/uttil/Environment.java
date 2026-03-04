@@ -1,5 +1,5 @@
 package uttil;
 
 public enum Environment {
-    DEV, TEST, STAGING
+    DEV, TEST, STAGING, BETA
 }
