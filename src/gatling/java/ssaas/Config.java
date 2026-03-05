@@ -3,7 +3,7 @@ package ssaas;
 import uttil.Environment;
 
 public class Config {
-    public static final Environment CURRENT_ENV = Environment.BETA;
+    public static final Environment CURRENT_ENV = Environment.DEV;
 
     public static String getBaseUrl() {
         return switch (CURRENT_ENV) {

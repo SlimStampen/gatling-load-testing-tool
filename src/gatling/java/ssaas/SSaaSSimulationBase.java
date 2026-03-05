@@ -48,6 +48,11 @@ public class SSaaSSimulationBase {
     // Counter for generating sequential numeric IDs for V1
     private static int numericIdCounter = 1000;
 
+    // Simple toggle to force a fixed reaction time for all generated timings.
+    // Set ENABLE_FIXED_REACTION = true and adjust FIXED_REACTION_MS to use a fixed reaction time.
+    public static final boolean ENABLE_FIXED_REACTION = false;
+    public static final long FIXED_REACTION_MS = 1000L;
+
     public static class FactContent {
         public final String cueText;
         public final String answer;
@@ -142,7 +147,7 @@ public class SSaaSSimulationBase {
      */
     public static Timing calculateTiming(Session session) {
         long startTime = session.contains("startTime") ? session.getLong("startTime") : System.currentTimeMillis();
-        long reactionTime = ThreadLocalRandom.current().nextLong(800, 3000);
+        long reactionTime = ENABLE_FIXED_REACTION ? FIXED_REACTION_MS : ThreadLocalRandom.current().nextLong(800, 3000);
         long presentationDuration = reactionTime + ThreadLocalRandom.current().nextLong(500, 2000);
         long currentTime = System.currentTimeMillis();
         long sessionTime = currentTime - startTime;
