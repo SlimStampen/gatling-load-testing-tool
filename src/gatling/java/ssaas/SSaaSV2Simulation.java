@@ -14,6 +14,42 @@ import static ssaas.SSaaSSimulationBase.*;
 
 public class SSaaSV2Simulation extends Simulation {
 
+    private static ChainBuilder buildFinishedStatsRequest() {
+        return exec(http("Get Finished Stats")
+                .get("/v2/statistics/session/finish/#{sessionId}")
+                .check(status().is(200))
+                // Verify base response parameters
+                .check(jsonPath("$.currentSessionTime").saveAs("currentSessionTime"))
+                .check(jsonPath("$.totalSessionTime").saveAs("totalSessionTime"))
+                .check(jsonPath("$.currentAverageReactionTime").saveAs("currentAverageReactionTime"))
+                .check(jsonPath("$.totalAverageReactionTime").saveAs("totalAverageReactionTime"))
+                .check(jsonPath("$.correctAnswers").saveAs("correctAnswers"))
+                .check(jsonPath("$.incorrectAnswers").saveAs("incorrectAnswers"))
+                // Verify slowestRTFact (can be null or a full fact object with UUID)
+                .check(jsonPath("$.slowestRTFact.id").optional().saveAs("slowestRTFactId"))
+                .check(jsonPath("$.slowestRTFact.cueTexts[0]").optional().saveAs("slowestRTFactCueText"))
+                .check(jsonPath("$.slowestRTFact.answers[0]").optional().saveAs("slowestRTFactAnswer"))
+                // Verify mostIncorrectRTFact (can be null or a full fact object with UUID)
+                .check(jsonPath("$.mostIncorrectRTFact.id").optional().saveAs("mostIncorrectRTFactId"))
+                .check(jsonPath("$.mostIncorrectRTFact.cueTexts[0]").optional().saveAs("mostIncorrectRTFactCueText"))
+                .check(jsonPath("$.mostIncorrectRTFact.answers[0]").optional().saveAs("mostIncorrectRTFactAnswer"))
+        )
+        .exec(session -> {
+            // Validate UUID format for slowestRTFact if it exists
+            String slowestRTFactId = session.getString("slowestRTFactId");
+            if (slowestRTFactId != null && !slowestRTFactId.equals("null")) {
+                validateUuidFormat(slowestRTFactId);
+            }
+
+            // Validate UUID format for mostIncorrectRTFact if it exists
+            String mostIncorrectRTFactId = session.getString("mostIncorrectRTFactId");
+            if (mostIncorrectRTFactId != null && !mostIncorrectRTFactId.equals("null")) {
+                validateUuidFormat(mostIncorrectRTFactId);
+            }
+
+            return session;
+        });
+    }
 
     ChainBuilder practiceSessionFlow = exec(session -> {
                 // Generate UUID userId for V2
@@ -64,7 +100,7 @@ public class SSaaSV2Simulation extends Simulation {
                     .check(jsonPath("$.sessionProgress.achievedCredit").saveAs("achievedCredit"))
             )
             .pause(1, 2)
-            .repeat(10).on(
+            .repeat(30).on(
                     exec(SSaaSSimulationBase::prepareResponseSession)
                             .exec(http("Submit Response")
                                     .post("/v2/response/save")
@@ -108,7 +144,8 @@ public class SSaaSV2Simulation extends Simulation {
                                 String cueExists = session.getString("cueExists");
                                 return achievedCredit || cueExists == null || cueExists.equals("null");
                             })
-            );
+            )
+            .exec(buildFinishedStatsRequest());
 
     HttpProtocolBuilder httpProtocol =
             http.baseUrl(Config.getBaseUrl())
@@ -124,7 +161,7 @@ public class SSaaSV2Simulation extends Simulation {
 
     {
         setUp(
-                practiceSessionScenario.injectOpen(rampUsers(5).during(15))
+                practiceSessionScenario.injectOpen(rampUsers(50).during(20))
 //                practiceSessionScenario.injectOpen(atOnceUsers(40))
 
         ).protocols(httpProtocol);
