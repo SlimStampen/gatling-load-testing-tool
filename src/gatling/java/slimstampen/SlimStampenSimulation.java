@@ -32,14 +32,25 @@ public class SlimStampenSimulation extends Simulation {
     ChainBuilder jwks =
             exec(http("JWKS").get("/.well-known/jwks.json").check(status().is(200)));
 
-    ChainBuilder loginAndPractice = feed(userFeeder)
+    ChainBuilder userLogin = feed(userFeeder)
             .exec(http("login")
                     .post("/api/user/login")
                     .body(StringBody("{ \"username\": \"#{email}\", \"password\": \"#{password}\"}"))
                     .check(header("Set-Cookie").exists().saveAs("session"))
             )
-            .exec(addCookie(Cookie("Cookie", "#{session}")))
-            .pause(1)
+            .exec(addCookie(Cookie("Cookie", "#{session}")));
+
+    // Creates a fresh demo user without history on every call, so no users.csv is needed
+    ChainBuilder demoLogin = exec(http("demo_login")
+            .post("/api/user/login-token")
+            .body(StringBody("{ \"userId\": \"demo\", \"lessonId\": " + LESSON_ID + " }"))
+            .check(status().is(200))
+            .check(jsonPath("$.success").ofBoolean().is(true))
+            .check(header("Set-Cookie").exists().saveAs("session"))
+    )
+            .exec(addCookie(Cookie("Cookie", "#{session}")));
+
+    ChainBuilder practice = pause(1)
             .exec(http("profile_get")
                     .get("/api/profile/get/en-GB")
                     .check(bodyString().saveAs("body"))
@@ -149,17 +160,22 @@ public class SlimStampenSimulation extends Simulation {
                     );
 
     ScenarioBuilder json = scenario("Json").exec(jwks);
-    ScenarioBuilder loginScenario = scenario("Login and practice").exec(loginAndPractice);
+    ScenarioBuilder loginScenario = scenario("Login and practice").exec(userLogin).exec(practice);
+    ScenarioBuilder demoScenario = scenario("Demo user and practice").exec(demoLogin).exec(practice);
     ScenarioBuilder classroomScenario = scenario("Login, load the library and check statistics").exec(loginAndCheckStatistics);
 
     {
         setUp(
                 json.injectOpen(rampUsers(AMOUNT_OF_USERS).during(10)),
-                loginScenario.injectOpen(
+                demoScenario.injectOpen(
                         // Stagger user start times randomly between 0 and 5 seconds
                         nothingFor(Duration.ofMillis(ThreadLocalRandom.current().nextInt(0, 1))),
                         rampUsers(AMOUNT_OF_USERS).during(AMOUNT_OF_USERS / 2)
                 ),
+//                loginScenario.injectOpen(
+//                        nothingFor(Duration.ofMillis(ThreadLocalRandom.current().nextInt(0, 1))),
+//                        rampUsers(AMOUNT_OF_USERS).during(AMOUNT_OF_USERS / 2)
+//                ),
                 classroomScenario.injectOpen(atOnceUsers(1))
         ).protocols(httpProtocol);
     }
